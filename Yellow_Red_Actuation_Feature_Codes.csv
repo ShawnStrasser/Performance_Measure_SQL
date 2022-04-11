@@ -1,0 +1,11 @@
+Feature,Description,Value Type,Period
+1,Yellow Actuations,Actuations,Yellow
+2,Minor Violation Actuations,Actuations,Minor
+3,Severe Vilation Actuations,Actuations,Severe
+4,Yellow Average Time (ms),Average Time,Yellow
+5,Minor Viloation Average Time (ms),Average Time,Minor
+6,Sever Violation Average Time (ms),Average Time,Sever
+7,Yellow Time Standard Deviation (ms),Standard Deviation,Yellow
+8,Minor Violation Time Standard Deviation (ms),Standard Deviation,Minor
+9,Severe Violation Time Standard Deviation (ms),Standard Deviation,Severe
+10,Total Actuations (over all periods including green),Total Actuations,Total
