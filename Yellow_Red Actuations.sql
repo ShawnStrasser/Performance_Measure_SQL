@@ -32,6 +32,7 @@ FROM [MaxView_1.9.0.744].[dbo].[GroupableElements]
 WHERE Right(GroupableElements.Number,5) = @TSSU)
 
 --#Yellow: phase yellow on and off events, with start and end timestamps
+--Phase event timestamps are shifted by the @Latency variable
 SELECT
 	DATEADD(second, @Latency, Lag(TimeStamp) OVER (ORDER BY TimeStamp)) as BeginYellow,
 	DATEADD(second, @Latency, TimeStamp) as EndYellow,
@@ -88,33 +89,74 @@ FROM #Actuations
 Group By TimePeriod
 
 
---Counts the number of actuations during each period
+--Yellow2 Actuations Table
 SELECT
 	TimePeriod,
-	SUM(CASE WHEN ArrivalTime >= BeginYellow and ArrivalTime < EndYellow THEN 1 ELSE 0 END) as Yellow,
-	SUM(CASE WHEN ArrivalTime >= EndYellow and ArrivalTime < Severe_Time THEN 1 ELSE 0 END) as Red_Minor,
-	SUM(CASE WHEN ArrivalTime >= Severe_Time and ArrivalTime < EndRed THEN 1 ELSE 0 END) as Red_Severe
-INTO #Final
-FROM #Filtered_Yellow, #Actuations
-WHERE ActuationDate=YellowDate --Add time period to the where clause???
+	COUNT(*) as Yellow,
+	AVG(DATEDIFF(ms, BeginYellow, ArrivalTime)) as Yellow_Avg_Time,
+	CONVERT(int, STDEV(DATEDIFF(ms, BeginYellow, ArrivalTime))) as Yellow_SD
+INTO #Yellow2
+FROM #Filtered_Yellow
+JOIN #Actuations
+	ON ArrivalTime >= BeginYellow 
+	and ArrivalTime < EndYellow
+	and ActuationDate = YellowDate
 GROUP BY TimePeriod
 
---Calculate percentages
+--Minor Violation Actuations Table
+SELECT
+	TimePeriod,
+	COUNT(*) as Minor,
+	AVG(DATEDIFF(ms, EndYellow, ArrivalTime)) as Minor_Avg_Time,
+	CONVERT(int, STDEV(DATEDIFF(ms, EndYellow, ArrivalTime))) as Minor_SD
+INTO #Minor
+FROM #Filtered_Yellow
+JOIN #Actuations
+	ON ArrivalTime >= EndYellow 
+	and ArrivalTime < Severe_Time
+	and ActuationDate = YellowDate
+GROUP BY TimePeriod
+
+--Severe Violation Actuations Table
+SELECT
+	TimePeriod,
+	COUNT(*) as Severe,
+	AVG(DATEDIFF(ms, Severe_Time, ArrivalTime)) as Severe_Avg_Time,
+	CONVERT(int, STDEV(DATEDIFF(ms, Severe_Time, ArrivalTime))) as Severe_SD
+INTO #Severe
+FROM #Filtered_Yellow
+JOIN #Actuations
+	ON ArrivalTime >= Severe_Time 
+	and ArrivalTime < EndRed
+	and ActuationDate = YellowDate
+GROUP BY TimePeriod
+
+--Join #Yellow, #Minor, #Severe, and Calculate percentages
 SELECT
 	#Total.TimePeriod, 
 	Yellow,
-	Red_Minor,
-	Red_Severe,
+	Yellow_Avg_Time,
+	Yellow_SD,
+	Minor,
+	Minor_Avg_Time,
+	Minor_SD,
+	Severe,
+	Severe_Avg_Time,
+	Severe_SD,
 	TotalActuations,
 	Yellow * 100 / TotalActuations as Percent_Yellow,
-	Red_Minor * 100 / TotalActuations as Percent_Red_Minor,
-	Red_Severe * 100 / TotalActuations as Percent_Red_Major
+	Minor * 100 / TotalActuations as Percent_Red_Minor,
+	Severe * 100 / TotalActuations as Percent_Red_Major
 FROM #Total
-LEFT JOIN #Final ON #Final.TimePeriod=#Total.TimePeriod
+LEFT JOIN #Yellow2 ON #Yellow2.TimePeriod=#Total.TimePeriod
+LEFT JOIN #Minor ON #Minor.TimePeriod=#Total.TimePeriod
+LEFT JOIN #Severe ON #Severe.TimePeriod=#Total.TimePeriod
 ORDER BY TimePeriod
 	
 
 DROP TABLE #Filtered_Yellow
 DROP TABLE #Actuations
 DROP TABLE #Total
-DROP TABLE #Final
+DROP TABLE #Yellow2
+DROP TABLE #Minor
+DROP TABLE #Severe
